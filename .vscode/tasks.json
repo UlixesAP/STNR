@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Турнирки: dev-сервер (Vite)",
+      "type": "npm",
+      "script": "dev",
+      "path": ".",
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "(Local:|ready in)"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      },
+      "isBackground": true,
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "Турнирки: сборка (build)",
+      "type": "npm",
+      "script": "build",
+      "path": ".",
+      "problemMatcher": []
+    },
+    {
+      "label": "Турнирки: предпросмотр сборки",
+      "type": "npm",
+      "script": "preview",
+      "path": ".",
+      "problemMatcher": [],
+      "isBackground": true,
+      "dependsOn": ["Турнирки: сборка (build)"]
+    }
+  ]
+}
