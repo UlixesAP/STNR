@@ -109,8 +109,13 @@ const App = {
 
     const bindCard = (sel, hash) => {
       const el = this.root.querySelector(sel);
-      if (!el) return;
+      if (!el) {
+        console.warn('bindCard: element not found', sel);
+        return;
+      }
+      console.log('bindCard:', sel, '→', hash);
       const go = () => {
+        console.log('click:', sel, 'hash:', hash);
         location.hash = hash;
       };
       el.onclick = go;
