@@ -708,6 +708,24 @@ select:focus {
   gap: 0.5rem;
 }
 
+/* Стили для сыгранных матчей */
+.match-row--played {
+  background: var(--surface-overlay);
+  border-color: var(--success);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2);
+}
+
+.match-row--played .score-input {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  font-weight: 700;
+}
+
+.match-status--finished {
+  color: var(--success) !important;
+  font-weight: 600;
+}
+
 .match-status {
   font-size: 0.8125rem;
   color: var(--muted);
@@ -970,13 +988,31 @@ select:focus {
   word-break: break-word;
 }
 
-.playoff-match .team-line.winner {
-  background: rgba(16, 185, 129, 0.35);
+.playoff-match .team-line .team-score {
   font-weight: 700;
+  color: var(--text-primary);
+  font-size: 1.125rem;
+  min-width: 1.5rem;
+  text-align: right;
 }
 
-.playoff-match .team-line.loser {
-  opacity: 0.65;
+.match-penalty-result {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--warning);
+  font-weight: 500;
+  padding: 0.25rem 0 0;
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.match-extra-result {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--secondary-text, #6c757d);
+  font-weight: 500;
+  padding: 0.25rem 0 0;
+  margin-top: 0.125rem;
 }
 
 .playoff-match [data-confirm-playoff] {
@@ -1175,21 +1211,33 @@ select:focus {
   font-weight: 700;
   background: var(--standings-th-bg);
   color: var(--accent);
+  text-align: center;
 }
 
+/* ---- NEW: 3-column duel layout (A | timer | B) ---- */
 .score-duel {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 }
 
+/* Desktop: 3 columns with timer in center */
+.score-duel--3col {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+/* Basketball and Football: horizontal with 3 cols */
 .score-duel--basketball,
 .score-duel--football {
   gap: 1.25rem;
 }
 
-.score-duel--compact {
+/* Volleyball compact inline: keep old 2-col style */
+.score-duel--compact,
+.score-duel--volleyball {
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
 }
@@ -1200,10 +1248,58 @@ select:focus {
   border: 1px solid var(--border);
   background: var(--surface-overlay);
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .score-team-zone--football {
   padding: 1.25rem;
+}
+
+/* ---- Timer center zone ---- */
+.score-duel__timer {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  min-width: 8rem;
+}
+
+.score-duel__timer .score-timer__display {
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  margin: 0;
+  line-height: 1;
+}
+
+.score-duel__timer .score-timer__title {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.score-duel__timer .score-timer__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.score-duel__timer .score-timer__btns .btn {
+  min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .score-team-name {
@@ -1315,6 +1411,31 @@ select:focus {
   color: var(--muted);
 }
 
+.score-match-summary {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.score-match-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.score-match-summary-row span {
+  color: var(--muted);
+}
+
+.score-match-summary-row strong {
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
 .score-timer {
   margin-top: 1rem;
   text-align: center;
@@ -1410,6 +1531,208 @@ select:focus {
   margin: 0 0 0.5rem;
 }
 
+/* ===== HOCKEY PENALTIES (NEW) ===== */
+.scoreboard-card--penalties {
+  margin-top: 1rem;
+}
+
+.score-penalties-duel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.score-team-penalty-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Зона ввода номера игрока */
+.score-penalty-input-zone {
+  width: 100%;
+}
+
+.score-penalty-player-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.score-penalty-player-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.score-penalty-player-input::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Кнопки штрафа */
+.score-penalty-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.btn-penalty {
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.btn-penalty:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-pen-2 {
+  background: #60a5fa;
+  color: white;
+  border: none;
+}
+
+.btn-pen-2:hover {
+  background: #3b82f6;
+}
+
+.btn-pen-4 {
+  background: #3b82f6;
+  color: white;
+  border: none;
+}
+
+.btn-pen-4:hover {
+  background: #2563eb;
+}
+
+.btn-pen-5 {
+  background: #2563eb;
+  color: white;
+  border: none;
+}
+
+.btn-pen-5:hover {
+  background: #1d4ed8;
+}
+
+.btn-pen-10 {
+  background: #1d4ed8;
+  color: white;
+  border: none;
+}
+
+.btn-pen-10:hover {
+  background: #1e40af;
+}
+
+/* Список штрафов */
+.score-penalty-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 2rem;
+}
+
+/* Строка штрафа */
+.score-penalty-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  border-left: 3px solid var(--accent);
+  transition: all 0.2s;
+}
+
+.score-penalty-row--served {
+  opacity: 0.5;
+  border-left-color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.score-penalty-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.score-penalty-player {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.score-penalty-duration {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Таймер штрафа */
+.score-penalty-timer {
+  font-family: 'Courier New', monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 4rem;
+  text-align: center;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 0.35rem;
+}
+
+.score-penalty--urgent .score-penalty-timer {
+  color: #dc2626;
+  animation: pulse-timer 1s ease-in-out infinite;
+}
+
+@keyframes pulse-timer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Кнопки действий */
+.btn-pen-release {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.btn-pen-undo {
+  padding: 0.25rem 0.4rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* История штрафов */
+.score-penalty-history {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.score-penalty-history-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.35rem;
+}
+
 .score-summary p {
   margin: 0.5rem 0;
   font-size: 1rem;
@@ -1421,6 +1744,130 @@ select:focus {
   color: var(--success);
 }
 
+/* ===== TENNIS ===== */
+.score-tennis-match {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin: 1rem 0;
+}
+
+.score-tennis-player {
+  text-align: center;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: var(--surface-overlay);
+}
+
+.score-tennis-player--left {
+  border-left: 4px solid var(--accent);
+}
+
+.score-tennis-player--right {
+  border-right: 4px solid var(--accent);
+}
+
+.score-tennis-match-center {
+  min-width: 12rem;
+  text-align: center;
+}
+
+.score-tennis-points--big {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--accent);
+  margin: 0.75rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-sets-won {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.score-sets-won strong {
+  color: var(--accent);
+  font-size: 1.125rem;
+}
+
+.score-tennis-sets-table {
+  padding: 0.75rem;
+  background: var(--surface-overlay);
+  border-radius: 0.5rem;
+  min-height: 4rem;
+}
+
+.score-tennis-game-info {
+  text-align: center;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.score-tennis-sets-info {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.score-tennis-sets-info strong {
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.score-tennis-tb-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  margin-left: 0.5rem;
+}
+
+.score-tennis-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.score-tennis-actions .btn {
+  min-width: 12rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+@media (max-width: 36rem) {
+  .score-tennis-match {
+    grid-template-columns: 1fr;
+  }
+
+  .score-tennis-match-center {
+    order: -1;
+    min-width: auto;
+  }
+
+  .score-tennis-player--left {
+    border-left: none;
+    border-top: 4px solid var(--accent);
+  }
+
+  .score-tennis-player--right {
+    border-right: none;
+    border-bottom: 4px solid var(--accent);
+  }
+}
+
+@media (min-width: 48.0625rem) {
+  .score-tennis-points--big {
+    font-size: 4rem;
+  }
+}
+
 @media (min-width: 30.0625rem) {
   .system-pick--3 {
     grid-template-columns: repeat(3, 1fr);
@@ -1429,6 +1876,16 @@ select:focus {
   .score-duel--basketball,
   .score-duel--football {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /* Show timer in center on wider screens for 3col layout */
+  .score-duel--3col .score-duel__timer {
+    display: flex;
+  }
+
+  /* On 3col layout, team zones are smaller */
+  .score-duel--3col .score-team-zone {
+    padding: 1rem;
   }
 
   .score-actions-row {
@@ -1450,6 +1907,14 @@ select:focus {
 @media (min-width: 48.0625rem) {
   .score-big {
     font-size: 4.5rem;
+  }
+
+  .score-duel--3col .score-duel__timer .score-timer__display {
+    font-size: 2.5rem;
+  }
+
+  .score-duel--3col .score-duel__timer {
+    min-width: 10rem;
   }
 }
 
@@ -1695,4 +2160,746 @@ select:focus {
   .btn:hover {
     transform: none;
   }
+}
+
+/* --- Срочный штраф --- */
+.score-penalty--urgent {
+  background: rgba(220, 38, 38, 0.15);
+  border-left: 3px solid #dc2626;
+  animation: pulse-urgent 1s ease-in-out infinite;
+}
+
+@keyframes pulse-urgent {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* --- Подсказка пустого счета --- */
+.score-empty-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
+/* ==========================================================================
+   Кнопка «Вести счёт» для матчей
+   ========================================================================== */
+
+.match-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-scoreboard-match {
+  background: var(--success);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  min-height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.btn-scoreboard-match:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.btn-scoreboard-match:active {
+  transform: translateY(0);
+}
+
+/* Кнопка "Матч завершён" */
+.btn-scoreboard-match--finished {
+  background: var(--success) !important;
+  color: #fff !important;
+  opacity: 0.9 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+  border: 2px solid var(--success);
+}
+
+.btn-scoreboard-match--finished:hover {
+  transform: none !important;
+  filter: none !important;
+}
+
+/* Если у матча уже есть привязанный scoreboard */
+.btn-scoreboard-match[data-linked='1'] {
+  background: var(--accent);
+}
+
+.btn-scoreboard-match[data-linked='1']:hover {
+  filter: brightness(1.1);
+}
+
+/* ==========================================================================
+   Кнопка «Записать счёт» для матчей
+   ========================================================================== */
+
+.btn-record-match {
+  background: var(--warning);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  min-height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.btn-record-match:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.btn-record-match:active {
+  transform: translateY(0);
+}
+
+.btn-record-match--finished {
+  background: var(--warning) !important;
+  color: #fff !important;
+  opacity: 0.9 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+  border: 2px solid var(--warning);
+}
+
+.btn-record-match--finished:hover {
+  transform: none !important;
+  filter: none !important;
+}
+
+/* ==========================================================================
+   Заблокированные поля ввода (зафиксированные матчи)
+   ========================================================================== */
+
+.score-input--disabled {
+  background: var(--bg-muted) !important;
+  color: var(--text-muted) !important;
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+}
+
+/* ==========================================================================
+   Модальное окно выбора способа ввода результата
+   ========================================================================== */
+
+.score-choice-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--surface-overlay-strong);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 1rem;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.score-choice-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  max-width: 24rem;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  animation: slide-up 0.25s ease;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(1rem); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.score-choice-panel h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+.score-choice-teams {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.score-choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.score-choice-btn {
+  width: 100%;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  min-height: var(--touch-min);
+}
+
+.score-choice-btn[data-method='scoreboard'] {
+  background: var(--success);
+  color: #fff;
+}
+
+.score-choice-btn[data-method='scoreboard']:hover {
+  filter: brightness(1.15);
+}
+
+.score-choice-btn[data-method='manual'] {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.score-choice-btn[data-method='manual']:hover {
+  background: var(--surface-overlay);
+}
+
+.score-choice-close {
+  width: 100%;
+  text-align: center;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: color 0.2s;
+  min-height: var(--touch-min);
+}
+
+.score-choice-close:hover {
+  color: var(--text);
+}
+
+/* ==========================================================================
+   Адаптивность для олимпийской сетки с кнопкой «Вести счёт»
+   ========================================================================== */
+
+.playoff-match {
+  position: relative;
+}
+
+.playoff-match .btn-scoreboard-match {
+  margin-top: 0.5rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.playoff-match .btn-record-match {
+  margin-top: 0.5rem;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Адаптивность для мобильных устройств
+   ========================================================================== */
+
+@media (max-width: 480px) {
+  .score-choice-panel {
+    padding: 1.25rem;
+    margin: 0.5rem;
+  }
+
+  .score-choice-panel h3 {
+    font-size: 1rem;
+  }
+
+  .match-row__actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .match-status {
+    font-size: 0.75rem;
+  }
+
+  .btn-scoreboard-match {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .score-choice-buttons {
+    flex-direction: row;
+  }
+
+  .score-choice-panel {
+    max-width: 28rem;
+  }
+}
+
+/* ==========================================================================
+   Стритбол табло
+   ========================================================================== */
+
+.score-duel--streetball {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.score-pts-grid--streetball {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.score-pts-grid--streetball .btn {
+  min-width: 3rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.score-penalties-duel--streetball {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.score-team-penalty-simple {
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-overlay);
+  text-align: center;
+}
+
+.score-penalty-counter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.score-penalty-value {
+  font-size: 2rem;
+  font-weight: 800;
+  min-width: 3rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-penalty-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.score-penalty-buttons .btn {
+  min-width: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.score-timer-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.score-timer-display {
+  font-size: 3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  margin: 0.5rem 0;
+  transition: color 0.3s ease;
+}
+
+.score-timer-display--expired {
+  color: #ff4444;
+  animation: timer-pulse 2s infinite;
+}
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.score-timer-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.score-timer-buttons .btn {
+  min-width: 5rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.scoreboard-card--overtime {
+  border: 2px solid var(--accent);
+  background: linear-gradient(135deg, var(--bg-card) 0%, color-mix(in srgb, var(--accent) 10%, transparent) 100%);
+}
+
+.scoreboard-card--overtime .section-title {
+  color: var(--accent);
+}
+
+@media (max-width: 600px) {
+  .score-penalties-duel--streetball {
+    grid-template-columns: 1fr;
+  }
+
+  .score-timer-display {
+    font-size: 2.25rem;
+  }
+
+  .score-timer-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .score-timer-buttons .btn {
+    width: 100%;
+  }
+
+  .score-pts-grid--streetball {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .score-pts-grid--streetball .btn {
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Индивидуальные штрафы (баскетбол)
+   ========================================================================== */
+
+.score-individual-penalties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.score-ind-team h4 {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.score-player-register {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.score-player-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-overlay);
+  color: var(--text);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+.score-player-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.score-players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.score-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-overlay);
+}
+
+.score-player-number {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  min-width: 3rem;
+  text-align: center;
+}
+
+.score-player-fouls {
+  font-size: 1.25rem;
+  font-weight: 800;
+  min-width: 2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-player-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.score-player-buttons .btn-xs {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 2rem;
+}
+
+@media (max-width: 600px) {
+  .score-individual-penalties {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === Mixed tournament: 4-column picker === */
+.system-pick--4 {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 30.0625rem) {
+  .system-pick--4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 48.0625rem) {
+  .system-pick--4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.system-card--mixed {
+  border-color: rgba(124, 58, 237, 0.35);
+}
+
+.system-card--mixed:hover {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 1.875rem rgba(124, 58, 237, 0.2);
+}
+
+/* === Модалка выбора системы смешанного турнира === */
+.system-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 1rem;
+  animation: fade-in 0.2s ease;
+}
+
+.system-picker-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  max-width: 42rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: slide-up 0.25s ease;
+}
+
+.system-picker-panel h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  color: var(--text);
+  text-align: center;
+}
+
+.system-picker-hint {
+  margin: 0 0 1.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
+}
+
+.system-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 48.0625rem) {
+  .system-picker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.system-picker-card {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-overlay);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.system-picker-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px var(--card-hover-shadow);
+  transform: translateY(-2px);
+}
+
+.system-picker-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.system-picker-card .muted-desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.system-picker-close {
+  width: 100%;
+}
+
+/* ==========================================================================
+   Модалка выбора системы смешанного турнира
+   ========================================================================== */
+
+.system-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 1rem;
+  animation: fade-in 0.2s ease;
+}
+
+.system-picker-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  max-width: 42rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: slide-up 0.25s ease;
+}
+
+.system-picker-panel h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  color: var(--text);
+  text-align: center;
+}
+
+.system-picker-hint {
+  margin: 0 0 1.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
+}
+
+.system-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 48.0625rem) {
+  .system-picker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.system-picker-card {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-overlay);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.system-picker-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px var(--card-hover-shadow);
+  transform: translateY(-2px);
+}
+
+.system-picker-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.system-picker-card .muted-desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.system-picker-close {
+  width: 100%;
 }

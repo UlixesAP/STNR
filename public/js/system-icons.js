@@ -69,5 +69,24 @@ const SystemIcons = {
       <path class="i-stroke" d="M24 15V11M28.2 18.2L31.5 15.5M27.8 23.4L32.5 24M24 23.4V28M20.2 23.4L15.5 24M19.8 18.2L16.5 15.5"/>
       <circle class="i-ring" cx="24" cy="24" r="13"/>
       <path class="i-light" d="M15.5 17.5c2.5-2 6-2.5 8.5-1" fill="none"/>
-    </svg>`
+    </svg>`,
+
+  mixed: `
+    <svg class="sys-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <circle class="i-bg" cx="24" cy="24" r="22"/>
+      <!-- Групповой этап: 3 столбца -->
+      <rect class="i-secondary" x="10" y="12" width="5" height="22" rx="1"/>
+      <rect class="i-primary" x="17" y="16" width="5" height="18" rx="1"/>
+      <rect class="i-light" x="24" y="10" width="5" height="24" rx="1"/>
+      <!-- Стрелка перехода к плей-офф -->
+      <path class="i-stroke" d="M32 22h4l-2-2M36 22h-4" stroke-width="1.5" fill="none"/>
+      <!-- Плей-офф: дерево матчей -->
+      <path class="i-primary" d="M38 15v8M38 23v8" stroke-width="1.5" fill="none"/>
+      <path class="i-secondary" d="M34 19c2 0 2 4 4 4" stroke-width="1.5" fill="none"/>
+      <!-- Кубок победителя -->
+      <path class="i-light" d="M35 34c0 3 2 5 5 5s5-2 5-5" stroke-width="1.5" fill="none"/>
+      <line class="i-stroke" x1="40" y1="39" x2="40" y2="42" stroke-width="1.5"/>
+      <line class="i-stroke" x1="36" y1="42" x2="44" y2="42" stroke-width="1.5"/>
+    </svg>
+  `
 };

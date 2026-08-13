@@ -1,6 +1,358 @@
 const App = {
   root: null,
   currentId: null,
+  _scorePollInterval: null,
+  _currentTournament: null,
+
+  ensureLinkedScoreId(t, matchIndex) {
+    const m = t.state.matches?.[matchIndex];
+    if (!m) return null;
+    if (!m.linkedScoreId) {
+      m.linkedScoreId = 'ls_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      this.persist(t);
+    }
+    return m.linkedScoreId;
+  },
+
+  ensureBracketLinkedScoreId(t, kind, rIdx, mIdx) {
+    const match = this._getPlayoffMatch(t.state.bracket, kind, rIdx, mIdx);
+    if (!match) return null;
+    const key = `${kind}-${rIdx}-${mIdx}`;
+    if (!match.linkedScoreId) {
+      match.linkedScoreId = 'ls_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      this.persist(t);
+    }
+    return match.linkedScoreId;
+  },
+
+  createLinkedScoreboard(tournamentId, teamA, teamB, matchIndex) {
+    const t = TournamentStorage.get(tournamentId);
+    if (!t) return null;
+
+    const match = t.state.matches?.[matchIndex];
+    if (!match) return null;
+
+    // Если уже есть linkedScoreId - ищем scoreboard по этому ID
+    if (match.linkedScoreId) {
+      const existing = ScoreStorage.getByLinkedId(match.linkedScoreId);
+      if (existing) {
+        return existing;
+      }
+      // Табло удалено, можно создать новое
+    }
+
+    // Генерируем ID до сохранения
+    const linkedScoreId = 'ls_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    match.linkedScoreId = linkedScoreId;
+    this.persist(t);
+
+    // Создаём scoreboard с тем же ID
+    const session = ScoreStorage.create('football');
+    
+    // Устанавливаем названия команд
+    session.teamA = teamA;
+    session.teamB = teamB;
+    session.tournamentId = tournamentId;
+    session.matchIndex = matchIndex;
+    session.linkedScoreId = linkedScoreId;
+    session.updatedAt = new Date().toISOString();
+    
+    // Явно обновляем scoreboard в хранилище
+    ScoreStorage.save(session);
+    
+    return session;
+  },
+
+  createBracketLinkedScoreboard(tournamentId, teamA, teamB, kind, rIdx, mIdx) {
+    const t = TournamentStorage.get(tournamentId);
+    if (!t) return null;
+
+    const match = this._getPlayoffMatch(t.state.bracket, kind, rIdx, mIdx);
+    if (!match) return null;
+
+    const linkedScoreId = 'ls_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    match.linkedScoreId = linkedScoreId;
+    this.persist(t);
+
+    const session = ScoreStorage.create('football');
+    session.teamA = teamA;
+    session.teamB = teamB;
+    session.tournamentId = tournamentId;
+    session.matchIndex = null;
+    session.bracketMatch = { kind, rIdx: String(rIdx), mIdx: String(mIdx) };
+    session.linkedScoreId = linkedScoreId;
+    session.updatedAt = new Date().toISOString();
+    ScoreStorage.save(session);
+    
+    return session;
+  },
+
+  /**
+   * Получить финальный счёт матча с учётом пенальти для football
+   */
+  _getFinalScore(sb) {
+    if (!sb || !sb.state) return { scoreA: 0, scoreB: 0 };
+    const st = sb.state;
+    const sport = sb.sport;
+    
+    // Для football — счёт основного + дополнительного времени (без пенальти)
+    if (sport === 'football') {
+      let regularA = 0;
+      let regularB = 0;
+      let extraA = 0;
+      let extraB = 0;
+      
+      if (st.phase === 'finished' || st.phase === 'extra_draw' || st.phase === 'penalties') {
+        // Матч завершён или близок к завершению — берём regularTotal
+        regularA = st.regularTotalA || 0;
+        regularB = st.regularTotalB || 0;
+        if (st.extra && st.extra.recorded) {
+          extraA = st.extra.scoreA || 0;
+          extraB = st.extra.scoreB || 0;
+        }
+      } else {
+        // Матч в процессе — берём текущий счёт
+        regularA = st.scoreA || 0;
+        regularB = st.scoreB || 0;
+      }
+      
+      const scoreA = regularA + extraA;
+      const scoreB = regularB + extraB;
+      
+      // Если есть серия пенальти, возвращаем отдельно счёт и результат пенальти
+      if (st.phase === 'finished' && st.penalties && st.penalties.shotsA && st.penalties.shotsA.length > 0) {
+        const penaltyA = st.penalties.shotsA.filter(Boolean).length;
+        const penaltyB = st.penalties.shotsB.filter(Boolean).length;
+        return { 
+          scoreA, 
+          scoreB,
+          penaltyA,
+          penaltyB,
+          wasDecidedByPenalties: regularA === regularB && extraA === extraB
+        };
+      }
+      
+      return { 
+        scoreA, 
+        scoreB,
+        penaltyA: null,
+        penaltyB: null,
+        wasDecidedByPenalties: false
+      };
+    }
+    
+    // Для других видов спорта — используем regularTotal или текущий счёт
+    const scoreA = st.regularTotalA ?? st.scoreA ?? 0;
+    const scoreB = st.regularTotalB ?? st.scoreB ?? 0;
+    return { 
+      scoreA, 
+      scoreB,
+      penaltyA: null,
+      penaltyB: null,
+      wasDecidedByPenalties: false
+    };
+  },
+
+  startScorePolling(t) {
+    this.stopScorePolling();
+    this._currentTournament = t;
+    this._scorePollInterval = setInterval(() => {
+      if (!this._currentTournament) {
+        this.stopScorePolling();
+        return;
+      }
+      const fresh = TournamentStorage.get(this._currentTournament.id);
+      if (!fresh) {
+        this.stopScorePolling();
+        return;
+      }
+
+      let hasChanges = false;
+
+      if (fresh.type === 'round-robin') {
+        const matches = fresh.state.matches || [];
+        for (const m of matches) {
+          if (!m.linkedScoreId) continue;
+          const sb = ScoreStorage.getByLinkedId(m.linkedScoreId);
+          if (sb && sb.state?.phase === 'finished') {
+            const scores = this._getFinalScore(sb);
+            const hasChanged = !m._synced || m.scoreA !== scores.scoreA || m.scoreB !== scores.scoreB;
+            m.scoreA = scores.scoreA;
+            m.scoreB = scores.scoreB;
+            if (scores.penaltyA != null) m.penaltyA = scores.penaltyA;
+            if (scores.penaltyB != null) m.penaltyB = scores.penaltyB;
+            if (scores.wasDecidedByPenalties) m.wasDecidedByPenalties = scores.wasDecidedByPenalties;
+            m.isPlayed = true;
+            if (scores.scoreA > scores.scoreB) {
+              m.winner = sb.teamA;
+            } else if (scores.scoreB > scores.scoreA) {
+              m.winner = sb.teamB;
+            } else {
+              m.winner = null;
+            }
+            m._synced = true;
+            if (hasChanged) hasChanges = true;
+          }
+        }
+      } else if (fresh.type === 'olympic') {
+        const bracket = fresh.state.bracket;
+        const checkMatch = (match) => {
+          if (!match?.linkedScoreId) return;
+          const sb = ScoreStorage.getByLinkedId(match.linkedScoreId);
+          if (sb && sb.state?.phase === 'finished') {
+            const scores = this._getFinalScore(sb);
+            const hasChanged = !match._synced || match.scoreA !== scores.scoreA || match.scoreB !== scores.scoreB;
+            match.scoreA = scores.scoreA;
+            match.scoreB = scores.scoreB;
+            if (scores.penaltyA != null) match.penaltyA = scores.penaltyA;
+            if (scores.penaltyB != null) match.penaltyB = scores.penaltyB;
+            if (scores.wasDecidedByPenalties) match.wasDecidedByPenalties = scores.wasDecidedByPenalties;
+            // Используем победителя из scoreboard (там уже учтены пенальти)
+            if (sb.state?.winner) {
+              match.winner = sb.state.winner;
+              match.loser = sb.state.winner === sb.teamA ? sb.teamB : sb.teamA;
+            } else if (scores.scoreA > scores.scoreB) {
+              match.winner = sb.teamA;
+              match.loser = sb.teamB;
+            } else if (scores.scoreB > scores.scoreA) {
+              match.winner = sb.teamB;
+              match.loser = sb.teamA;
+            } else {
+              match.winner = null;
+              match.loser = null;
+            }
+            match.isFinished = true;
+            match._synced = true;
+            if (hasChanged) hasChanges = true;
+          }
+        };
+        
+        if (bracket?.rounds) {
+          for (const round of bracket.rounds) {
+            for (const match of round.matches) {
+              checkMatch(match);
+            }
+          }
+        }
+        checkMatch(bracket.finalMatch);
+        checkMatch(bracket.thirdPlaceMatch);
+        
+        // Обработка финала: фиксируем 3-е место из проигравшего финала
+        if (bracket.finalMatch?.isFinished && bracket.finalMatch.loser && !bracket.thirdPlaceTeam) {
+          bracket.thirdPlaceTeam = bracket.finalMatch.loser;
+          hasChanges = true;
+        }
+        
+        // Обработка матча за 3-е место: фиксируем 3-е место
+        if (bracket.thirdPlaceMatch?.isFinished && bracket.thirdPlaceMatch.loser && !bracket.thirdPlaceTeam) {
+          bracket.thirdPlaceTeam = bracket.thirdPlaceMatch.loser;
+          hasChanges = true;
+        }
+        
+        // Проверяем, все ли матчи раунда завершены, и продвигаем команды
+        if (bracket?.rounds) {
+          for (let ri = 0; ri < bracket.rounds.length; ri++) {
+            const round = bracket.rounds[ri];
+            if (round?.matches?.length && round.matches.every((m) => m.isFinished && m.winner)) {
+              OlympicEngine.advanceOnRoundComplete(bracket, ri);
+              hasChanges = true;
+            }
+          }
+        }
+      }
+
+      if (hasChanges) {
+        this.persist(fresh);
+        if (fresh.type === 'round-robin') {
+          this.renderRoundRobin(fresh);
+        } else {
+          this.renderOlympic(fresh);
+        }
+      }
+    }, 2000);
+  },
+
+  stopScorePolling() {
+    if (this._scorePollInterval) {
+      clearInterval(this._scorePollInterval);
+      this._scorePollInterval = null;
+    }
+    this._currentTournament = null;
+  },
+
+  showScoreChoiceModal(teamA, teamB, callback) {
+    const existing = document.getElementById('score-choice-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'score-choice-modal';
+    overlay.className = 'score-choice-overlay';
+    overlay.innerHTML = `
+      <div class="score-choice-panel">
+        <h3>Внести результ��т матча</h3>
+        <p class="score-choice-teams">${this._esc(teamA)} — ${this._esc(teamB)}</p>
+        <div class="score-choice-buttons">
+          <button type="button" class="btn btn-success score-choice-btn" data-method="scoreboard">⚽ Вести счёт</button>
+          <button type="button" class="btn btn-ghost score-choice-btn" data-method="manual">Вписать вручную</button>
+        </div>
+        <button type="button" class="btn btn-ghost score-choice-close" data-close>Отмена</button>
+      </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target.dataset.close) {
+        overlay.remove();
+      } else if (e.target.dataset.method) {
+        overlay.remove();
+        callback(e.target.dataset.method);
+      }
+    });
+
+    document.body.appendChild(overlay);
+  },
+
+  _showSystemPickerModal() {
+    const existing = document.getElementById('mixed-system-picker');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'mixed-system-picker';
+    overlay.className = 'system-picker-overlay';
+    overlay.innerHTML = `
+      <div class="system-picker-panel">
+        <h3>Выберите систему смешанного турнира</h3>
+        <p class="system-picker-hint">Каждая система комбинирует групповой этап и плей-офф</p>
+        <div class="system-picker-grid">
+          ${MIXED_SYSTEMS.map(sys => `
+            <div class="system-picker-card" data-system="${sys.id}">
+              <h4>${sys.label}</h4>
+              <p class="muted-desc">${sys.desc}</p>
+            </div>
+          `).join('')}
+        </div>
+        <button class="btn btn-ghost system-picker-close">Отмена</button>
+      </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target.dataset.system) {
+        const systemId = e.target.dataset.system;
+        document.body.removeChild(overlay);
+        this._createMixedTournament(systemId);
+      } else if (e.target.classList.contains('system-picker-close')) {
+        document.body.removeChild(overlay);
+      } else if (e.target === overlay) {
+        document.body.removeChild(overlay);
+      }
+    });
+
+    document.body.appendChild(overlay);
+  },
+
+  _createMixedTournament(systemId) {
+    const t = TournamentStorage.create('mixed', systemId);
+    location.hash = `#/t/${t.id}`;
+  },
 
   init() {
     this.root = document.getElementById('app');
@@ -9,6 +361,14 @@ const App = {
       return;
     }
     window.addEventListener('hashchange', () => this.route());
+    // Обработчик изменения storage (кросс-tab)
+    window.addEventListener('storage', (e) => {
+      if (e.key === ScoreStorage.KEY) {
+        this._checkScoreboardUpdates();
+      }
+    });
+    // Периодическая проверка обновлений scoreboard
+    setInterval(() => this._checkScoreboardUpdates(), 2000);
     this.route();
   },
 
@@ -23,6 +383,10 @@ const App = {
     if (parts[0] === 'new' && (parts[1] === 'rr' || parts[1] === 'oly')) {
       const t = TournamentStorage.create(parts[1] === 'rr' ? 'round-robin' : 'olympic');
       location.hash = `#/t/${t.id}`;
+      return;
+    }
+    if (parts[0] === 'new' && parts[1] === 'mixed') {
+      this._showSystemPickerModal();
       return;
     }
     if (parts[0] === 'score') {
@@ -49,6 +413,7 @@ const App = {
   openScoreboard(id) {
     const s = ScoreStorage.get(id);
     if (!s) {
+      console.warn('Scoreboard not found:', id);
       location.hash = '#/score';
       return;
     }
@@ -58,6 +423,7 @@ const App = {
 
   renderDashboard() {
     this.currentId = null;
+    this.stopScorePolling();
     const list = TournamentStorage.list();
     const scores = ScoreStorage.list();
 
@@ -72,7 +438,7 @@ const App = {
 
         <section class="glass">
           <h2 class="glass__title">Создать турнир</h2>
-          <div class="system-pick system-pick--3">
+          <div class="system-pick system-pick--4">
             <div class="system-card" data-action="new-rr" role="button" tabindex="0">
               ${SystemIcons.wrap('rr')}
               <h3>Турнирная таблица</h3>
@@ -82,6 +448,11 @@ const App = {
               ${SystemIcons.wrap('oly')}
               <h3>Олимпийская система</h3>
               <p class="muted-desc">Плей-офф · 4–18 команд</p>
+            </div>
+            <div class="system-card system-card--mixed" data-action="new-mixed" role="button" tabindex="0">
+              ${SystemIcons.wrap('mixed')}
+              <h3>Смешанный турнир</h3>
+              <p class="muted-desc">Турнирная таблица + плей-офф</p>
             </div>
             <div class="system-card system-card--score" data-action="score-pick" role="button" tabindex="0">
               ${SystemIcons.wrap('score')}
@@ -128,6 +499,7 @@ const App = {
     };
     bindCard('[data-action="new-rr"]', '#/new/rr');
     bindCard('[data-action="new-oly"]', '#/new/oly');
+    bindCard('[data-action="new-mixed"]', '#/new/mixed');
     bindCard('[data-action="score-pick"]', '#/score');
 
     scores.forEach((s) => {
@@ -198,7 +570,8 @@ const App = {
     }
     this.currentId = id;
     if (t.type === 'round-robin') this.renderRoundRobin(t);
-    else this.renderOlympic(t);
+    else if (t.type === 'olympic') this.renderOlympic(t);
+    else if (t.type === 'mixed') this.renderMixed(t);
   },
 
   persist(t) {
@@ -206,32 +579,35 @@ const App = {
   },
 
   _metaForm(t, teamOptions) {
+    const isGenerated = t.state.generated === true;
     const counts = t.type === 'round-robin' ? RR_TEAM_COUNTS : OLY_TEAM_COUNTS;
     const opts = counts
       .map((n) => `<option value="${n}" ${t.meta.numTeams === n ? 'selected' : ''}>${n} команд</option>`)
       .join('');
 
+    const disabled = isGenerated ? ' disabled' : '';
+
     return `
       <div class="grid-2">
         <div class="form-group">
           <label>Название мероприятия</label>
-          <input type="text" id="f-eventName" value="${this._esc(t.meta.eventName)}" placeholder="Чемпионат района">
+          <input type="text" id="f-eventName" value="${this._esc(t.meta.eventName)}" placeholder="Чемпионат района"${disabled}>
         </div>
         <div class="form-group">
           <label>Вид спорта</label>
-          <select id="f-sport">${SPORTS.map((s) => `<option value="${s}" ${t.meta.sport === s ? 'selected' : ''}>${formatSport(s)}</option>`).join('')}</select>
+          <select id="f-sport"${disabled}>${SPORTS.map((s) => `<option value="${s}" ${t.meta.sport === s ? 'selected' : ''}>${formatSport(s)}</option>`).join('')}</select>
         </div>
         <div class="form-group">
           <label>Место проведения</label>
-          <select id="f-venue">${VENUES.map((v) => `<option value="${this._esc(v)}" ${t.meta.venue === v ? 'selected' : ''}>${this._esc(v)}</option>`).join('')}</select>
+          <select id="f-venue"${disabled}>${VENUES.map((v) => `<option value="${this._esc(v)}" ${t.meta.venue === v ? 'selected' : ''}>${this._esc(v)}</option>`).join('')}</select>
         </div>
         <div class="form-group">
           <label>Дата проведения</label>
-          <input type="date" id="f-date" value="${t.meta.eventDate || ''}">
+          <input type="date" id="f-date" value="${t.meta.eventDate || ''}"${disabled}>
         </div>
         <div class="form-group">
           <label>Шаблон (количество команд)</label>
-          <select id="f-numTeams">${opts}</select>
+          <select id="f-numTeams"${disabled}>${opts}</select>
         </div>
       </div>
       <div id="team-names-block" class="${t.state.generated ? 'hidden' : ''}">
@@ -379,6 +755,7 @@ const App = {
   },
 
   renderRoundRobin(t) {
+    this.stopScorePolling();
     const standings =
       t.state.generated && t.state.teams.length
         ? RoundRobinEngine.calculateStandings(t.state.teams, t.state.matches)
@@ -452,20 +829,65 @@ const App = {
     const hasTour = m.tour != null;
     const rowClass = hasTour ? 'match-row match-row--with-tour' : 'match-row match-row--flat';
     const label = hasTour ? `<span class="match-tour-label">Матч ${m.matchInTour}</span>` : '';
+    const isFootball = t.meta?.sport === 'футбол';
+    const hasLinked = !!m.linkedScoreId;
+    const sbExists = hasLinked ? !!ScoreStorage.getByLinkedId(m.linkedScoreId) : false;
+    const isMatchFinished = m._synced || (m.isPlayed && m.scoreA !== '' && m.scoreB !== '');
+    
+    let scoreboardBtn = '';
+    let recordBtn = '';
+    
+    if (isFootball) {
+      if (isMatchFinished) {
+        scoreboardBtn = `
+          <button type="button" class="btn btn-sm btn-scoreboard-match btn-scoreboard-match--finished" disabled>
+            ✓ Матч завершён
+          </button>`;
+        recordBtn = `
+          <button type="button" class="btn btn-sm btn-record-match btn-record-match--finished" disabled>
+            ✓ Записано
+          </button>`;
+      } else if (hasLinked) {
+        scoreboardBtn = `
+          <button type="button" class="btn btn-sm btn-scoreboard-match" data-match-btn="${i}" data-linked="${sbExists ? '1' : ''}">
+            ${sbExists ? '⚽ Счёт' : '⚽ Вести счёт'}
+          </button>`;
+        recordBtn = `
+          <button type="button" class="btn btn-sm btn-record-match" data-record-btn="${i}">
+            ✎ Записать счёт
+          </button>`;
+      } else {
+        scoreboardBtn = `
+          <button type="button" class="btn btn-sm btn-scoreboard-match" data-match-btn="${i}">
+            ⚽ Вести счёт
+          </button>`;
+        recordBtn = `
+          <button type="button" class="btn btn-sm btn-record-match" data-record-btn="${i}">
+            ✎ Записать счёт
+          </button>`;
+      }
+    }
+    
+    const scoreInputsDisabled = isMatchFinished ? ' disabled' : '';
+    
     return `
-      <div class="${rowClass}" id="mrow-${i}">
+      <div class="${rowClass} ${isMatchFinished ? 'match-row--played' : ''}" id="mrow-${i}">
         ${label}
         <div class="match-row__teams">
           <span class="team-name team-name--away">${this._esc(a)}</span>
           <div class="scores">
-            <input type="number" min="0" inputmode="numeric" class="sc-a score-input" data-i="${i}" value="${sa}" placeholder="0" aria-label="Счёт ${this._esc(a)}">
+            <input type="number" min="0" inputmode="numeric" class="sc-a score-input" data-i="${i}" value="${sa}" placeholder="0" aria-label="Счёт ${this._esc(a)}"${scoreInputsDisabled}>
             <span aria-hidden="true">:</span>
-            <input type="number" min="0" inputmode="numeric" class="sc-b score-input" data-i="${i}" value="${sb}" placeholder="0" aria-label="Счёт ${this._esc(b)}">
+            <input type="number" min="0" inputmode="numeric" class="sc-b score-input" data-i="${i}" value="${sb}" placeholder="0" aria-label="Счёт ${this._esc(b)}"${scoreInputsDisabled}>
           </div>
           <span class="team-name">${this._esc(b)}</span>
         </div>
         <div class="match-row__footer">
-          <span class="match-status" id="mst-${i}"></span>
+          <div class="match-row__actions">
+            <span class="match-status" id="mst-${i}"></span>
+            ${scoreboardBtn}
+            ${recordBtn}
+          </div>
         </div>
       </div>`;
   },
@@ -501,6 +923,9 @@ const App = {
 
     const update = () => {
       t.state.matches.forEach((m, i) => {
+        // Если матч зафиксирован, не позволяем менять счёт
+        if (m.isFinalized) return;
+        
         const aIn = list.querySelector(`.sc-a[data-i="${i}"]`);
         const bIn = list.querySelector(`.sc-b[data-i="${i}"]`);
         if (!aIn || !bIn) return;
@@ -511,18 +936,153 @@ const App = {
         m.isPlayed =
           sa !== null && sb !== null && !isNaN(sa) && !isNaN(sb) && sa >= 0 && sb >= 0;
         const st = document.getElementById(`mst-${i}`);
-        if (m.isPlayed) {
+        if (m._synced || m.isFinalized) {
+          st.textContent = 'Матч завершён';
+          st.className = 'match-status match-status--finished';
+        } else if (m.isPlayed) {
           if (sa > sb) st.textContent = `${t.state.teams[m.teamA]} выигрывает`;
           else if (sb > sa) st.textContent = `${t.state.teams[m.teamB]} выигрывает`;
           else st.textContent = 'Ничья';
-        } else st.textContent = 'Ожидание';
+          st.className = 'match-status';
+        } else {
+          st.textContent = 'Ожидание';
+          st.className = 'match-status';
+        }
       });
       this.persist(t);
       this._updateStandingsDom(t);
     };
 
-    list.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', update));
+    list.querySelectorAll('input').forEach((inp) => {
+      // Не позволяем менять счёт зафиксированных матчей
+      const dataI = inp.dataset.i;
+      const match = t.state.matches[parseInt(dataI, 10)];
+      if (match?.isFinalized) {
+        inp.disabled = true;
+        inp.classList.add('score-input--disabled');
+      }
+      inp.addEventListener('input', update);
+    });
+
+    list.querySelectorAll('[data-match-btn]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.matchBtn, 10);
+        const m = t.state.matches[idx];
+        if (!m) return;
+        const a = t.state.teams[m.teamA];
+        const bTeam = t.state.teams[m.teamB];
+
+        // Всегда берем свежую копию турнира из хранилища
+        const freshT = TournamentStorage.get(t.id);
+        const freshM = freshT.state.matches[idx];
+
+        // Сначала проверяем linkedScoreId прямо из матча
+        if (freshM.linkedScoreId) {
+          const existingSb = ScoreStorage.getByLinkedId(freshM.linkedScoreId);
+          if (existingSb) {
+            // Табло существует, проверяем, завершен ли матч
+            if (existingSb.state?.phase === 'finished') {
+              const scores = this._getFinalScore(existingSb);
+              const hasChanged = !freshM._synced || freshM.scoreA !== scores.scoreA || freshM.scoreB !== scores.scoreB;
+              freshM.scoreA = scores.scoreA;
+              freshM.scoreB = scores.scoreB;
+              if (scores.penaltyA != null) freshM.penaltyA = scores.penaltyA;
+              if (scores.penaltyB != null) freshM.penaltyB = scores.penaltyB;
+              if (scores.wasDecidedByPenalties) freshM.wasDecidedByPenalties = scores.wasDecidedByPenalties;
+              freshM.isPlayed = true;
+              if (scores.scoreA > scores.scoreB) {
+                freshM.winner = existingSb.teamA;
+              } else if (scores.scoreB > scores.scoreA) {
+                freshM.winner = existingSb.teamB;
+              } else {
+                freshM.winner = null;
+              }
+              freshM._synced = true;
+              if (hasChanged) {
+                TournamentStorage.save(freshT);
+                this.renderRoundRobin(freshT);
+              }
+              // Открываем scoreboard
+              setTimeout(() => {
+                location.hash = `#/score/s/${existingSb.id}`;
+              }, 150);
+              return;
+            }
+            // Просто открываем существующее табло
+            window.location.hash = `#/score/s/${existingSb.id}`;
+            return;
+          }
+          // Табло было удалено, очищаем linkedScoreId
+          freshM.linkedScoreId = null;
+          TournamentStorage.save(freshT);
+          this.renderRoundRobin(freshT);
+          return;
+        }
+
+        // Табло нет, создаём новое
+        const newSession = this.createLinkedScoreboard(freshT.id, a, bTeam, idx);
+        if (newSession) {
+          setTimeout(() => {
+            window.location.hash = `#/score/s/${newSession.id}`;
+          }, 50);
+        }
+      });
+    });
+
+    // Кнопки "Записать счёт" - берём счёт из полей ввода на строке матча
+    list.querySelectorAll('[data-record-btn]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.recordBtn, 10);
+        const m = t.state.matches[idx];
+        if (!m) return;
+        
+        const freshT = TournamentStorage.get(t.id);
+        const freshM = freshT?.state?.matches?.[idx];
+        if (!freshM) {
+          alert('Матч не найден. Обновите страницу.');
+          return;
+        }
+        
+        // Берём счёт из полей ввода на строке матча
+        const scoreAInput = list.querySelector(`.sc-a[data-i="${idx}"]`);
+        const scoreBInput = list.querySelector(`.sc-b[data-i="${idx}"]`);
+        const scoreA = scoreAInput ? parseInt(scoreAInput.value, 10) : null;
+        const scoreB = scoreBInput ? parseInt(scoreBInput.value, 10) : null;
+        
+        if (scoreA === null || scoreB === null || isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0) {
+          alert('Введите корректный счёт (числа 0 или больше) в поля результата матча.');
+          return;
+        }
+        
+        const teamA = freshT.state.teams[freshM.teamA];
+        const teamB = freshT.state.teams[freshM.teamB];
+        
+        if (scoreA > scoreB) {
+          freshM.winner = teamA;
+          freshM.loser = teamB;
+        } else if (scoreB > scoreA) {
+          freshM.winner = teamB;
+          freshM.loser = teamA;
+        } else {
+          freshM.winner = null;
+          freshM.loser = null;
+        }
+        
+        // Синхронизируем с таблицей
+        freshM._synced = true;
+        
+        TournamentStorage.save(freshT);
+        this.renderRoundRobin(freshT);
+      });
+    });
+
     update();
+
+    this.startScorePolling(t);
   },
 
   _rrTableHtml(teams, matches, standings) {
@@ -558,6 +1118,7 @@ const App = {
   },
 
   renderOlympic(t) {
+    this.stopScorePolling();
     const exportBtn = t.state.generated
       ? '<button type="button" class="btn btn-warning" data-export-xlsx>Выгрузить .xlsx</button>'
       : '';
@@ -615,6 +1176,7 @@ const App = {
       if (!fresh) return;
       this._publishOnline(t, this._renderOlympicPublishPreview(fresh));
     });
+    this.startScorePolling(t);
   },
 
   _renderBracketUI(t) {
@@ -658,6 +1220,89 @@ const App = {
     }
 
     root.onclick = (e) => this._onBracketClick(e);
+
+    root.querySelectorAll('[data-bracket-btn]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const kind = btn.dataset.kind;
+        const rIdx = btn.dataset.rIdx !== '' ? parseInt(btn.dataset.rIdx, 10) : null;
+        const mIdx = btn.dataset.mIdx !== '' ? parseInt(btn.dataset.mIdx, 10) : null;
+        const match = this._getPlayoffMatch(b, kind, rIdx, mIdx);
+        if (!match) return;
+        const a = match.teamA || t.state.teams[match.teamA] || '';
+        const bTeam = match.teamB || t.state.teams[match.teamB] || '';
+
+        // Всегда берем свежую копию турнира из хранилища
+        const freshT = TournamentStorage.get(t.id);
+        const freshMatch = this._getPlayoffMatch(freshT.state.bracket, kind, rIdx, mIdx);
+        if (!freshMatch) {
+          alert('Матч не найден. Обновите страницу.');
+          return;
+        }
+
+        // Сначала проверяем linkedScoreId прямо из матча
+        if (freshMatch.linkedScoreId) {
+          const existingSb = ScoreStorage.getByLinkedId(freshMatch.linkedScoreId);
+          if (existingSb) {
+            // Табло существует, проверяем, завершен ли матч
+              if (existingSb.state?.phase === 'finished') {
+                // Матч завершен, синхронизируем
+                const scores = this._getFinalScore(existingSb);
+                const hasChanged = !freshMatch._synced || freshMatch.scoreA !== scores.scoreA || freshMatch.scoreB !== scores.scoreB;
+                freshMatch.scoreA = scores.scoreA;
+                freshMatch.scoreB = scores.scoreB;
+                if (scores.penaltyA != null) freshMatch.penaltyA = scores.penaltyA;
+                if (scores.penaltyB != null) freshMatch.penaltyB = scores.penaltyB;
+                if (scores.wasDecidedByPenalties) freshMatch.wasDecidedByPenalties = scores.wasDecidedByPenalties;
+                if (scores.scoreA > scores.scoreB) {
+                  freshMatch.winner = existingSb.teamA;
+                  freshMatch.loser = existingSb.teamB;
+                } else if (scores.scoreB > scores.scoreA) {
+                  freshMatch.winner = existingSb.teamB;
+                  freshMatch.loser = existingSb.teamA;
+                } else {
+                  // Ничья по голам — используем победителя из scoreboard (пенальти)
+                  if (existingSb.state?.winner) {
+                    freshMatch.winner = existingSb.state.winner;
+                    freshMatch.loser = existingSb.state.winner === existingSb.teamA ? existingSb.teamB : existingSb.teamA;
+                  } else {
+                    freshMatch.winner = null;
+                    freshMatch.loser = null;
+                  }
+                }
+                freshMatch.isFinished = true;
+                freshMatch._synced = true;
+                if (hasChanged) {
+                  TournamentStorage.save(freshT);
+                  this.renderOlympic(freshT);
+                }
+              // Открываем scoreboard
+              setTimeout(() => {
+                location.hash = `#/score/s/${existingSb.id}`;
+              }, 150);
+              return;
+            }
+            // Просто открываем существующее табло
+            window.location.hash = `#/score/s/${existingSb.id}`;
+            return;
+          }
+          // Табло было удалено, очищаем linkedScoreId
+          freshMatch.linkedScoreId = null;
+          TournamentStorage.save(freshT);
+          this.renderOlympic(freshT);
+          return;
+        }
+
+        // Табло нет, создаём новое
+        const newSession = this.createBracketLinkedScoreboard(freshT.id, a, bTeam, kind, rIdx, mIdx);
+        if (newSession) {
+          setTimeout(() => {
+            window.location.hash = `#/score/s/${newSession.id}`;
+          }, 50);
+        }
+      });
+    });
 
     let html = '';
     if (b.thirdPlaceTeam) {
@@ -715,24 +1360,42 @@ const App = {
     div.className = 'playoff-match' + (kind === 'final' ? ' final-block' : '');
     let inner = title ? `<strong>${title}</strong>` : '';
 
-    const done = !!(match.isFinished && match.winner);
+    const done = !!(match.isFinished && match.winner) || match.isFinalized;
     const penId = kind === 'round' ? `pen-${rIdx}-${mIdx}` : `pen-${kind}`;
+    const isFootball = t.meta?.sport === 'футбол';
+    const hasLinked = !!match.linkedScoreId;
 
-    const line = (team, side) => {
+    const line = (team, side, score) => {
       const isW = done && match.winner === team;
       const isL = done && match.loser === team;
+      
+      if (!done) {
+        return `
+          <div class="team-line ${isW ? 'winner' : ''} ${isL ? 'loser' : ''}">
+            <span class="team-name">${this._esc(team)}</span>
+            <input type="number" min="0" inputmode="numeric" class="sc-${side} score-input score-input--sm" placeholder="0" aria-label="Счёт">
+          </div>`;
+      }
+      
       return `
         <div class="team-line ${isW ? 'winner' : ''} ${isL ? 'loser' : ''}">
           <span class="team-name">${this._esc(team)}</span>
-          ${
-            !done
-              ? `<input type="number" min="0" inputmode="numeric" class="sc-${side} score-input score-input--sm" placeholder="0" aria-label="Счёт">`
-              : `<span>${side === 'a' ? match.scoreA : match.scoreB}</span>`
-          }
+          <span class="team-score">${score ?? 0}</span>
         </div>`;
     };
 
-    inner += line(match.teamA, 'a') + line(match.teamB, 'b');
+    inner += line(match.teamA, 'a', match.scoreA) + line(match.teamB, 'b', match.scoreB);
+    
+    // Если была серия пенальти — выводим результат пенальти в скобках ниже под обеими командами
+    if (match.penaltyA != null && match.penaltyB != null) {
+      inner += `<div class="match-penalty-result">(пен. ${match.penaltyA}:${match.penaltyB})</div>`;
+    }
+    
+    // Если игралось дополнительное время — показываем его счёт отдельно
+    if (match.extraScoreA != null && match.extraScoreB != null) {
+      inner += `<div class="match-extra-result">Доп. время: ${match.extraScoreA}:${match.extraScoreB}</div>`;
+    }
+    
     div.innerHTML = inner;
 
     if (!done) {
@@ -767,14 +1430,35 @@ const App = {
       };
       scA.addEventListener('input', togglePen);
       scB.addEventListener('input', togglePen);
-    } else {
-      const res = document.createElement('div');
-      res.className = 'playoff-result';
-      res.innerHTML = `<strong>${match.scoreA} : ${match.scoreB}</strong>`;
-      if (match.penaltyA != null) {
-        res.innerHTML += ` <span class="text-warning">(пен. ${match.penaltyA}:${match.penaltyB})</span>`;
+
+      if (isFootball) {
+        const sbBtn = document.createElement('button');
+        sbBtn.type = 'button';
+        sbBtn.className = 'btn btn-sm btn-scoreboard-match';
+        
+        // Проверяем, завершен ли матч через scoreboard
+        let isMatchFinished = false;
+        if (hasLinked && match.linkedScoreId) {
+          const sb = ScoreStorage.getByLinkedId(match.linkedScoreId);
+          if (sb && sb.state?.phase === 'finished' && match._synced) {
+            isMatchFinished = true;
+          }
+        }
+        
+        if (isMatchFinished) {
+          sbBtn.className += ' btn-scoreboard-match--finished';
+          sbBtn.textContent = '✓ Матч завершён';
+          sbBtn.disabled = true;
+        } else {
+          sbBtn.textContent = hasLinked ? '⚽ Счёт' : '⚽ Вести счёт';
+        }
+        sbBtn.dataset.bracketBtn = '1';
+        sbBtn.dataset.kind = kind;
+        sbBtn.dataset.rIdx = rIdx != null ? String(rIdx) : '';
+        sbBtn.dataset.mIdx = mIdx != null ? String(mIdx) : '';
+        sbBtn.dataset.linked = hasLinked ? '1' : '';
+        div.appendChild(sbBtn);
       }
-      div.appendChild(res);
     }
 
     return div;
@@ -851,6 +1535,16 @@ const App = {
         if (round?.matches?.length && round.matches.every((m) => m.isFinished && m.winner)) {
           OlympicEngine.advanceOnRoundComplete(bracket, ri);
         }
+      }
+
+      // Обработка финала: фиксируем 3-е место из проигравшего финала
+      if (kind === 'final' && match.isFinished && match.loser && !bracket.thirdPlaceTeam) {
+        bracket.thirdPlaceTeam = match.loser;
+      }
+
+      // Обработка матча за 3-е место: фиксируем 3-е место
+      if (kind === 'third' && match.isFinished && match.winner && !bracket.thirdPlaceTeam) {
+        bracket.thirdPlaceTeam = match.loser;
       }
 
       this.persist(t);
@@ -996,6 +1690,112 @@ const App = {
       this._initResponsiveStandings();
     }
     return st;
+  },
+
+  _checkScoreboardUpdates() {
+    // Проверяем все матчи с linkedScoreId на завершение
+    if (!this.currentId) return;
+    const t = TournamentStorage.get(this.currentId);
+    if (!t || !t.state.generated) return;
+    
+    let hasChanges = false;
+    
+    if (t.type === 'round-robin') {
+      const matches = t.state.matches || [];
+      for (const m of matches) {
+        if (!m.linkedScoreId) continue;
+        const sb = ScoreStorage.getByLinkedId(m.linkedScoreId);
+        if (sb && sb.state?.phase === 'finished') {
+          const scores = this._getFinalScore(sb);
+          const hasChanged = !m._synced || m.scoreA !== scores.scoreA || m.scoreB !== scores.scoreB;
+          m.scoreA = scores.scoreA;
+          m.scoreB = scores.scoreB;
+          if (scores.penaltyA != null) m.penaltyA = scores.penaltyA;
+          if (scores.penaltyB != null) m.penaltyB = scores.penaltyB;
+          if (scores.wasDecidedByPenalties) m.wasDecidedByPenalties = scores.wasDecidedByPenalties;
+          m.isPlayed = true;
+          if (scores.scoreA > scores.scoreB) {
+            m.winner = sb.teamA;
+          } else if (scores.scoreB > scores.scoreA) {
+            m.winner = sb.teamB;
+          } else {
+            m.winner = null;
+          }
+          m._synced = true;
+          if (hasChanged) hasChanges = true;
+        }
+      }
+    } else if (t.type === 'olympic') {
+      const bracket = t.state.bracket;
+      const checkMatch = (match) => {
+        if (!match?.linkedScoreId) return;
+        const sb = ScoreStorage.getByLinkedId(match.linkedScoreId);
+        if (sb && sb.state?.phase === 'finished') {
+          const scores = this._getFinalScore(sb);
+          const hasChanged = !match._synced || match.scoreA !== scores.scoreA || match.scoreB !== scores.scoreB;
+          match.scoreA = scores.scoreA;
+          match.scoreB = scores.scoreB;
+          if (scores.penaltyA != null) match.penaltyA = scores.penaltyA;
+          if (scores.penaltyB != null) match.penaltyB = scores.penaltyB;
+          if (scores.wasDecidedByPenalties) match.wasDecidedByPenalties = scores.wasDecidedByPenalties;
+          if (scores.scoreA > scores.scoreB) {
+            match.winner = sb.teamA;
+            match.loser = sb.teamB;
+          } else if (scores.scoreB > scores.scoreA) {
+            match.winner = sb.teamB;
+            match.loser = sb.teamA;
+          } else {
+            match.winner = null;
+            match.loser = null;
+          }
+          match.isFinished = true;
+          match._synced = true;
+          if (hasChanged) hasChanges = true;
+        }
+      };
+      
+      if (bracket?.rounds) {
+        for (const round of bracket.rounds) {
+          for (const match of round.matches) {
+            checkMatch(match);
+          }
+        }
+      }
+      checkMatch(bracket.finalMatch);
+      checkMatch(bracket.thirdPlaceMatch);
+      
+      // Обработка финала: фиксируем 3-е место из проигравшего финала
+      if (bracket.finalMatch?.isFinished && bracket.finalMatch.loser && !bracket.thirdPlaceTeam) {
+        bracket.thirdPlaceTeam = bracket.finalMatch.loser;
+        hasChanges = true;
+      }
+      
+      // Обработка матча за 3-е место: фиксируем 3-е место
+      if (bracket.thirdPlaceMatch?.isFinished && bracket.thirdPlaceMatch.loser && !bracket.thirdPlaceTeam) {
+        bracket.thirdPlaceTeam = bracket.thirdPlaceMatch.loser;
+        hasChanges = true;
+      }
+      
+      // Проверяем, все ли матчи раунда завершены, и продвигаем команды
+      if (bracket?.rounds) {
+        for (let ri = 0; ri < bracket.rounds.length; ri++) {
+          const round = bracket.rounds[ri];
+          if (round?.matches?.length && round.matches.every((m) => m.isFinished && m.winner)) {
+            OlympicEngine.advanceOnRoundComplete(bracket, ri);
+            hasChanges = true;
+          }
+        }
+      }
+    }
+    
+    if (hasChanges) {
+      this.persist(t);
+      if (t.type === 'round-robin') {
+        this.renderRoundRobin(t);
+      } else {
+        this.renderOlympic(t);
+      }
+    }
   },
 
   _esc(s) {

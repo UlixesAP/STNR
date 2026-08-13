@@ -73,21 +73,13 @@ const OlympicEngine = {
 
 
     if (scoreA === scoreB) {
-
-      match.goalDifference = Math.abs(penA - penB);
-
+      match.goalDifference = 0;
       match.loserPenaltyScored = loser === match.teamA ? penA : penB;
-
       match.loserRegularGoals = loser === match.teamA ? scoreA : scoreB;
-
     } else {
-
       match.goalDifference = Math.abs(scoreA - scoreB);
-
       match.loserPenaltyScored = null;
-
       match.loserRegularGoals = loser === match.teamA ? scoreA : scoreB;
-
     }
 
   },

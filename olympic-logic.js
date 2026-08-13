@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         match.scoreA = scoreA;
         match.scoreB = scoreB;
-        match.goalDifference = Math.abs(scoreA - scoreB) + (match.penaltyA !== null ? Math.abs(match.penaltyA - match.penaltyB) : 0);
+        match.goalDifference = Math.abs(scoreA - scoreB);
         match.isFinished = true;
         
         // Добавляем в историю матчей

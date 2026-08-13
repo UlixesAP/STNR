@@ -35,7 +35,10 @@ const TournamentStorage = {
     this._write(this._read().filter((t) => t.id !== id));
   },
 
-  create(type) {
+  create(type, systemId) {
+    const teamCounts = type === 'round-robin' ? RR_TEAM_COUNTS : (type === 'olympic' ? OLY_TEAM_COUNTS : (MIXED_TEAM_COUNTS[systemId] || [4]));
+    const defaultTeams = teamCounts[0] || 4;
+    
     const t = {
       id: uid(),
       type,
@@ -44,11 +47,13 @@ const TournamentStorage = {
         venue: VENUES[0],
         sport: SPORTS[0],
         eventDate: new Date().toISOString().slice(0, 10),
-        numTeams: type === 'round-robin' ? 4 : 8
+        numTeams: defaultTeams
       },
       state: type === 'round-robin'
         ? { teams: [], matches: [], generated: false }
-        : { teams: [], bracket: { rounds: [], thirdPlaceMatch: null, finalMatch: null }, matchHistory: [], generated: false },
+        : type === 'olympic'
+          ? { teams: [], bracket: { rounds: [], thirdPlaceMatch: null, finalMatch: null }, matchHistory: [], generated: false }
+          : { teams: [], tables: [], qualification: [], bracket: { rounds: [], finalMatch: null, thirdPlaceMatch: null, thirdPlaceTeam: null }, generated: false, systemId },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
