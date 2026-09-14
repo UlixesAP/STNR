@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Просмотр турнирной таблицы (только просмотр)</title>
+  <style>
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:20px;background:#f6f8fa}
+    .container{max-width:1200px;margin:0 auto}
+    .info{margin-bottom:10px;color:#444}
+    #tableWrap{background:white;padding:16px;border-radius:8px;box-shadow:0 2px 8px rgba(16,24,40,.05)}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Онлайн-просмотр турнирной таблицы</h2>
+    <div class="info">Подключение к серверу событий... <span id="lastUpdate" style="margin-left:12px;color:#888;font-size:0.9em;"></span></div>
+    <div id="tableWrap">Ожидание данных...</div>
+  </div>
+
+  <script>
+    const evtSource = new EventSource('/events');
+    const info = document.querySelector('.info');
+    const tableWrap = document.getElementById('tableWrap');
+    const lastUpdate = document.getElementById('lastUpdate');
+
+    evtSource.onopen = () => { info.childNodes[0].textContent = 'Подключено. Ожидание обновлений. '; };
+    evtSource.onmessage = e => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d && d.html) {
+          tableWrap.innerHTML = d.html;
+        } else if (d && d.wbData) {
+          tableWrap.innerHTML = '<pre>' + JSON.stringify(d.wbData, null, 2) + '</pre>';
+        }
+        const now = new Date();
+        const ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+        lastUpdate.textContent = 'Обновлено: ' + ts;
+      } catch (err) {
+        tableWrap.innerHTML = 'Ошибка данных: ' + err.message;
+      }
+    };
+
+    evtSource.onerror = () => { info.textContent = 'Потеряно соединение, повторная попытка...'; };
+  </script>
+</body>
+</html>

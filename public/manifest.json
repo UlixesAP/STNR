@@ -1,0 +1,22 @@
+{
+  "name": "Спортивный менеджер турниров",
+  "short_name": "Турнирки",
+  "description": "Управление спортивными турнирами: круговая система, олимпийская система, смешанная",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e17",
+  "theme_color": "#0a0e17",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/images/logo-128.webp",
+      "sizes": "128x128",
+      "type": "image/webp"
+    },
+    {
+      "src": "/images/logo-256.webp",
+      "sizes": "256x256",
+      "type": "image/webp"
+    }
+  ]
+}

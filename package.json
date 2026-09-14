@@ -1,0 +1,30 @@
+{
+  "name": "sport-tournaments",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "serve": "node server.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js || true",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:save": "pm2 save",
+    "build": "vite build",
+    "build:css": "node scripts/minify-css.js",
+    "preview": "vite preview",
+    "logo": "node scripts/optimize-logo.js",
+    "postinstall": "node scripts/copy-vendor.js"
+  },
+  "devDependencies": {
+    "pm2": "^5.2.0",
+    "sharp": "^0.34.5",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "xlsx": "^0.18.5"
+  }
+}
