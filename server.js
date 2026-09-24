@@ -2,7 +2,11 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import ExcelJS from 'exceljs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 
