@@ -4,3 +4,9 @@ dist/
 *.log
 .env
 .env.local
+
+# IDE / локальные настройки
+.idea/
+.gigaide/
+gigacode.yml
+opencode.jsonc
