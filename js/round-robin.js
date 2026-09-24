@@ -67,23 +67,43 @@ const RoundRobinEngine = {
       .map(([, g]) => g);
   },
 
-  initStandings(teams) {
-    return teams.map((name, index) => ({
-      name,
-      index,
-      wins: 0,
-      draws: 0,
-      losses: 0,
+  initStandings(teams, sport) {
+    const base = {
+      name: '',
+      index: 0,
       goalsFor: 0,
       goalsAgainst: 0,
       points: 0,
       place: 0,
       headToHead: {}
+    };
+    if (sport === 'хоккей') {
+      return teams.map((name, index) => ({
+        ...base,
+        name,
+        index,
+        wins: 0,
+        winsOT: 0,
+        winsSO: 0,
+        lossesSO: 0,
+        lossesOT: 0,
+        losses: 0
+      }));
+    }
+    return teams.map((name, index) => ({
+      ...base,
+      name,
+      index,
+      wins: 0,
+      draws: 0,
+      losses: 0
     }));
   },
 
-  calculateStandings(teams, matches) {
-    const standings = this.initStandings(teams);
+calculateStandings(teams, matches, sport) {
+    const isHockey = sport === 'хоккей';
+    const isVolleyball = sport === 'волейбол';
+    const standings = this.initStandings(teams, sport);
 
     matches.forEach((match) => {
       if (!match.isPlayed || match.scoreA === null || match.scoreB === null) return;
@@ -95,25 +115,76 @@ const RoundRobinEngine = {
       teamB.goalsFor += match.scoreB;
       teamB.goalsAgainst += match.scoreA;
 
-      if (match.scoreA > match.scoreB) {
-        teamA.wins++;
-        teamB.losses++;
-        teamA.points += 3;
-        teamA.headToHead[match.teamB] = 'win';
-        teamB.headToHead[match.teamA] = 'loss';
-      } else if (match.scoreA < match.scoreB) {
-        teamB.wins++;
-        teamA.losses++;
-        teamB.points += 3;
-        teamA.headToHead[match.teamB] = 'loss';
-        teamB.headToHead[match.teamA] = 'win';
+      if (isHockey) {
+        const rt = match.resultType || 'regulation';
+        if (match.scoreA > match.scoreB) {
+          if (rt === 'overtime') { teamA.winsOT++; teamA.points += 2; teamB.lossesOT++; teamB.points += 1; }
+          else if (rt === 'shootout') { teamA.winsSO++; teamA.points += 2; teamB.lossesSO++; teamB.points += 1; }
+          else { teamA.wins++; teamA.points += 2; teamB.losses++; }
+          teamA.headToHead[match.teamB] = 'win';
+          teamB.headToHead[match.teamA] = 'loss';
+        } else if (match.scoreB > match.scoreA) {
+          if (rt === 'overtime') { teamB.winsOT++; teamB.points += 2; teamA.lossesOT++; teamA.points += 1; }
+          else if (rt === 'shootout') { teamB.winsSO++; teamB.points += 2; teamA.lossesSO++; teamA.points += 1; }
+          else { teamB.wins++; teamB.points += 2; teamA.losses++; }
+          teamA.headToHead[match.teamB] = 'loss';
+          teamB.headToHead[match.teamA] = 'win';
+        } else {
+          teamA.headToHead[match.teamB] = 'draw';
+          teamB.headToHead[match.teamA] = 'draw';
+        }
+      } else if (isVolleyball) {
+        if (match.scoreA > match.scoreB) {
+          teamA.wins++;
+          teamB.losses++;
+          if (match.scoreB <= 1) {
+            teamA.points += 3;
+          } else {
+            teamA.points += 2;
+            teamB.points += 1;
+          }
+          teamA.headToHead[match.teamB] = 'win';
+          teamB.headToHead[match.teamA] = 'loss';
+        } else if (match.scoreA < match.scoreB) {
+          teamB.wins++;
+          teamA.losses++;
+          if (match.scoreA <= 1) {
+            teamB.points += 3;
+          } else {
+            teamB.points += 2;
+            teamA.points += 1;
+          }
+          teamA.headToHead[match.teamB] = 'loss';
+          teamB.headToHead[match.teamA] = 'win';
+        } else {
+          teamA.draws++;
+          teamB.draws++;
+          teamA.points += 1;
+          teamB.points += 1;
+          teamA.headToHead[match.teamB] = 'draw';
+          teamB.headToHead[match.teamA] = 'draw';
+        }
       } else {
-        teamA.draws++;
-        teamB.draws++;
-        teamA.points += 1;
-        teamB.points += 1;
-        teamA.headToHead[match.teamB] = 'draw';
-        teamB.headToHead[match.teamA] = 'draw';
+        if (match.scoreA > match.scoreB) {
+          teamA.wins++;
+          teamB.losses++;
+          teamA.points += 3;
+          teamA.headToHead[match.teamB] = 'win';
+          teamB.headToHead[match.teamA] = 'loss';
+        } else if (match.scoreA < match.scoreB) {
+          teamB.wins++;
+          teamA.losses++;
+          teamB.points += 3;
+          teamA.headToHead[match.teamB] = 'loss';
+          teamB.headToHead[match.teamA] = 'win';
+        } else {
+          teamA.draws++;
+          teamB.draws++;
+          teamA.points += 1;
+          teamB.points += 1;
+          teamA.headToHead[match.teamB] = 'draw';
+          teamB.headToHead[match.teamA] = 'draw';
+        }
       }
     });
 
@@ -137,7 +208,7 @@ const RoundRobinEngine = {
       standings.find((t) => t.index === team.index).place = i + 1;
     });
 
-    return standings;
+    return sorted;
   },
 
   getMatchCell(matches, teamIdx, oppIdx) {
@@ -151,7 +222,8 @@ const RoundRobinEngine = {
     return { scored: match.scoreB, conceded: match.scoreA };
   },
 
-  exportXlsx(meta, teams, matches, standings) {
+  async exportXlsx(meta, teams, matches, standings, sport) {
+    await SheetJSLoader.load();
     if (typeof XLSX === 'undefined') {
       throw new Error('библиотека Excel не загружена');
     }
@@ -184,16 +256,31 @@ const RoundRobinEngine = {
         }
       }
 
-      const base = 2 + n;
+const base = 2 + n;
       const gd = team.goalsFor - team.goalsAgainst;
-      wsData[r][base] = team.wins;
-      wsData[r][base + 1] = team.draws;
-      wsData[r][base + 2] = team.losses;
-      wsData[r][base + 3] = team.goalsFor;
-      wsData[r][base + 4] = team.goalsAgainst;
-      wsData[r][base + 5] = gd;
-      wsData[r][base + 6] = team.points;
-      wsData[r][base + 7] = team.place || '';
+      const isHockey = sport === 'хоккей';
+      if (isHockey) {
+        wsData[r][base] = team.wins;
+        wsData[r][base + 1] = team.winsOT || 0;
+        wsData[r][base + 2] = team.winsSO || 0;
+        wsData[r][base + 3] = team.lossesSO || 0;
+        wsData[r][base + 4] = team.lossesOT || 0;
+        wsData[r][base + 5] = team.losses;
+        wsData[r][base + 6] = team.goalsFor;
+        wsData[r][base + 7] = team.goalsAgainst;
+        wsData[r][base + 8] = gd;
+        wsData[r][base + 9] = team.points;
+        wsData[r][base + 10] = team.place || '';
+      } else {
+        wsData[r][base] = team.wins;
+        wsData[r][base + 1] = team.draws;
+        wsData[r][base + 2] = team.losses;
+        wsData[r][base + 3] = team.goalsFor;
+        wsData[r][base + 4] = team.goalsAgainst;
+        wsData[r][base + 5] = gd;
+        wsData[r][base + 6] = team.points;
+        wsData[r][base + 7] = team.place || '';
+      }
     });
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -203,3 +290,6 @@ const RoundRobinEngine = {
     downloadXlsxWorkbook(wb, `${name}.xlsx`);
   }
 };
+
+window.RoundRobinEngine = RoundRobinEngine;
+

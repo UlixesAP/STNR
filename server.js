@@ -10,6 +10,7 @@ const RESULTS_DIR = path.join(process.cwd(), 'results');
 if (!fs.existsSync(RESULTS_DIR)) fs.mkdirSync(RESULTS_DIR, { recursive: true });
 
 let clients = [];
+let lastBroadcastHTML = null;
 
 app.get('/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -34,8 +35,16 @@ function sanitizeFilename(name) {
 
 app.post('/publish', (req, res) => {
   try {
-    broadcast(req.body);
-    res.json({ ok: true });
+    const { html } = req.body || {};
+    if (!html) {
+      return res.json({ ok: false, error: 'html is empty' });
+    }
+    if (html === lastBroadcastHTML) {
+      return res.json({ ok: true, status: 'unchanged' });
+    }
+    lastBroadcastHTML = html;
+    broadcast({ html });
+    res.json({ ok: true, status: 'sent' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, error: String(err) });
@@ -75,7 +84,7 @@ app.post('/save', async (req, res) => {
 });
 
 app.use('/results', express.static(RESULTS_DIR));
-app.use(express.static(process.cwd()));
+app.use(express.static(path.join(__dirname, 'dist')));
 
 app.get('/viewer', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'viewer.html'));

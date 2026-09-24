@@ -1,5 +1,4 @@
-/** Тема оформления: dark (ночная) | light (дневная) */
-const Theme = {
+export const Theme = {
   STORAGE_KEY: 'sport_tournaments_theme',
 
   get() {
@@ -19,10 +18,8 @@ const Theme = {
 
   apply(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-
     const themeColor = document.querySelector('meta[name="theme-color"]');
     if (themeColor) themeColor.content = theme === 'light' ? '#f0f4f8' : '#0a0e17';
-
     const colorScheme = document.querySelector('meta[name="color-scheme"]');
     if (colorScheme) colorScheme.content = theme === 'light' ? 'light' : 'dark';
   },

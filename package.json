@@ -12,9 +12,12 @@
     "pm2:restart": "pm2 restart ecosystem.config.js",
     "pm2:save": "pm2 save",
     "build": "vite build",
+    "build:css": "node scripts/minify-css.js",
     "preview": "vite preview",
     "logo": "node scripts/optimize-logo.js",
-    "postinstall": "node scripts/copy-vendor.js"
+    "postinstall": "node scripts/copy-vendor.js",
+    "deploy": "npm run build && rsync -avz --delete dist/ deploy@<IP-СЕРВЕРА>:/home/deploy/apps/turnirki/dist/",
+    "deploy:dry": "npm run build && rsync -avz --delete --dry-run dist/ deploy@<IP-СЕРВЕРА>:/home/deploy/apps/turnirki/dist/"
   },
   "devDependencies": {
     "pm2": "^5.2.0",
@@ -23,6 +26,7 @@
   },
   "dependencies": {
     "exceljs": "^4.4.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "xlsx": "^0.18.5"
   }
 }

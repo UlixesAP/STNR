@@ -90,3 +90,6 @@ const SystemIcons = {
     </svg>
   `
 };
+
+window.SystemIcons = SystemIcons;
+

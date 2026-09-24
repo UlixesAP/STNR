@@ -8,48 +8,6 @@ const SCORE_SPORTS = {
   tennis: { id: 'tennis', label: 'Теннис' }
 };
 
-/**
- * @typedef {Object} HockeyPenalty
- * @property {string} id — уникальный ID штрафа
- * @property {string} player
- * @property {number} minutes
- * @property {number} remainingSeconds
- * @property {boolean} active
- * @property {number} addedAt
- *
- * @typedef {Object} HockeyPenaltyShootout
- * @property {boolean[]} shotsA
- * @property {boolean[]} shotsB
- *
- * @typedef {Object} HockeyOvertime
- * @property {number} scoreA
- * @property {number} scoreB
- * @property {number} period
- *
- * @typedef {Object} HockeyTimerState
- * @property {number} totalSeconds
- * @property {number} baseSeconds
- * @property {boolean} running
- * @property {null|number} startedAt
- *
- * @typedef {Object} HockeyState
- * @property {{ elapsedMs: number, running: boolean, lastTick: null | number }} timer
- * @property {HockeyTimerState} hockeyTimer
- * @property {'period1'|'period2'|'period3'|'overtime'|'penalty_shootout'|'draw_prompt'|'ot_draw_prompt'|'finished'} phase
- * @property {number} scoreA
- * @property {number} scoreB
- * @property {{ number: number, scoreA: number, scoreB: number }[]} periods
- * @property {{ period: number, scoreA: number, scoreB: number }[]} overtimePeriods
- * @property {HockeyOvertime} overtime
- * @property {HockeyPenaltyShootout} penaltyShootouts
- * @property {boolean} penaltyShootoutsFinished
- * @property {string | null} winner
- * @property {string} teamA
- * @property {string} teamB
- * @property {HockeyPenalty[]} teamAPenalties
- * @property {HockeyPenalty[]} teamBPenalties
- */
-
 function scoreUid() {
   return 's_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 }
@@ -60,17 +18,28 @@ function createTimerState() {
 
 const ScoreStorage = {
   KEY: 'sport_scoreboards_v1',
+  _cache: null,
+  _loaded: false,
+
+  async _ensureLoaded() {
+    if (this._loaded) return;
+    await IdbStorage.ready();
+    this._cache = IdbStorage.get(this.KEY, []);
+    this._loaded = true;
+  },
 
   _read() {
-    try {
-      return JSON.parse(localStorage.getItem(this.KEY) || '[]');
-    } catch {
-      return [];
-    }
+    return this._cache || [];
   },
 
   _write(list) {
-    localStorage.setItem(this.KEY, JSON.stringify(list));
+    this._cache = list;
+    IdbStorage.set(this.KEY, list);
+  },
+
+  invalidate() {
+    this._cache = null;
+    this._loaded = false;
   },
 
   list() {
@@ -118,87 +87,52 @@ const ScoreStorage = {
     if (sport === 'basketball') {
       base.state = {
         timer: createTimerState(),
-        scoreA: 0,
-        scoreB: 0,
-        penaltyCurrentA: 0,
-        penaltyCurrentB: 0,
-        penaltyHistoryA: [],
-        penaltyHistoryB: [],
-        playersA: {},
-        playersB: {},
-        currentPeriod: 1,
-        matchFinished: false,
-        periods: []
+        scoreA: 0, scoreB: 0,
+        penaltyCurrentA: 0, penaltyCurrentB: 0,
+        penaltyHistoryA: [], penaltyHistoryB: [],
+        playersA: {}, playersB: {},
+        currentPeriod: 1, matchFinished: false, periods: []
       };
     } else if (sport === 'streetball') {
       base.state = {
         timer: createTimerState(),
-        scoreA: 0,
-        scoreB: 0,
-        regularTimeA: 0,
-        regularTimeB: 0,
-        overtimeScoreA: 0,
-        overtimeScoreB: 0,
-        penaltyA: 0,
-        penaltyB: 0,
-        phase: 'active',
-        matchFinished: false,
-        overtimeActive: false,
-        timerRunning: false,
-        timerElapsedMs: 0,
-        winner: null
+        scoreA: 0, scoreB: 0,
+        regularTimeA: 0, regularTimeB: 0,
+        overtimeScoreA: 0, overtimeScoreB: 0,
+        penaltyA: 0, penaltyB: 0,
+        phase: 'active', matchFinished: false,
+        overtimeActive: false, timerRunning: false,
+        timerElapsedMs: 0, winner: null
       };
     } else if (sport === 'volleyball') {
       base.state = {
         timer: createTimerState(),
-        setNumber: 1,
-        setsWonA: 0,
-        setsWonB: 0,
-        current: { pointsA: 0, pointsB: 0 },
-        sets: []
+        setNumber: 1, setsWonA: 0, setsWonB: 0,
+        current: { pointsA: 0, pointsB: 0 }, sets: []
       };
     } else if (sport === 'hockey') {
       base.state = {
         timer: { elapsedMs: 0, running: false, lastTick: null, totalSeconds: 0 },
-        phase: 'period1',
-        scoreA: 0,
-        scoreB: 0,
-        periods: [],
-        overtimePeriods: [],
+        phase: 'period1', scoreA: 0, scoreB: 0,
+        periods: [], overtimePeriods: [],
         overtime: { scoreA: 0, scoreB: 0, period: 1 },
         penaltyShootouts: { shotsA: [], shotsB: [] },
-        penaltyShootoutsFinished: false,
-        winner: null,
-        teamA: 'Команда А',
-        teamB: 'Команда Б',
-        teamAPenalties: [],
-        teamBPenalties: []
+        penaltyShootoutsFinished: false, winner: null,
+        teamA: 'Команда А', teamB: 'Команда Б',
+        teamAPenalties: [], teamBPenalties: []
       };
     } else if (sport === 'one_period') {
       base.state = {
         timer: createTimerState(),
-        scoreA: 0,
-        scoreB: 0,
-        periods: [],
-        matchFinished: false
+        scoreA: 0, scoreB: 0, periods: [], matchFinished: false
       };
     } else if (sport === 'tennis') {
       base.state = {
-        timer: createTimerState(),
-        sets: [],
+        timer: createTimerState(), sets: [],
         currentSet: {
-          gamesA: 0,
-          gamesB: 0,
-          game: {
-            pointA: 0,
-            pointB: 0,
-            advantage: null
-          },
-          tiebreak: {
-            pointA: 0,
-            pointB: 0,
-            servingA: true
-          },
+          gamesA: 0, gamesB: 0,
+          game: { pointA: 0, pointB: 0, advantage: null },
+          tiebreak: { pointA: 0, pointB: 0, servingA: true },
           tiebreakActive: false
         },
         matchFinished: false
@@ -206,19 +140,20 @@ const ScoreStorage = {
     } else {
       base.state = {
         timer: createTimerState(),
-        phase: 'half1',
-        scoreA: 0,
-        scoreB: 0,
-        halves: [],
-        regularTotalA: 0,
-        regularTotalB: 0,
+        phase: 'half1', scoreA: 0, scoreB: 0, halves: [],
+        regularTotalA: 0, regularTotalB: 0,
         extra: { scoreA: 0, scoreB: 0, active: false, recorded: false },
         penalties: { shotsA: [], shotsB: [] },
-        penaltiesFinished: false,
-        winner: null
+        penaltiesFinished: false, winner: null
       };
     }
 
     return this.save(base);
   }
 };
+
+window.SCORE_SPORTS = SCORE_SPORTS;
+window.scoreUid = scoreUid;
+window.createTimerState = createTimerState;
+window.ScoreStorage = ScoreStorage;
+

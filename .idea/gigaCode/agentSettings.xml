@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GigaCodeAgentSettings">
+    <option name="autoApprovedCommands">
+      <list>
+        <Execute>
+          <option name="pattern" value="copy &quot;C:\Users\PavlenkoAV\Desktop\CRM\Турнирки допы\js\mixed-engine.js&quot; &quot;C:\Users\PavlenkoAV\Desktop\CRM\Турнирки допы\public\js\&quot; &amp;&amp; copy &quot;C:\Users\PavlenkoAV\Desktop\CRM\Турнирки допы\js\mixed-ui.js&quot; &quot;C:\Users\PavlenkoAV\Desktop\CRM\Турнирки допы\public\js\&quot;" />
+        </Execute>
+      </list>
+    </option>
+  </component>
+</project>

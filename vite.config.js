@@ -1,13 +1,26 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
+import { readFileSync, writeFileSync } from 'fs';
+
+const BUILD_ID = Date.now().toString(36);
 
 export default defineConfig({
-  // Корень проекта — index.html, css/, js/
   root: '.',
   publicDir: 'public',
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID)
+  },
+  plugins: [{
+    name: 'sw-build-id',
+    closeBundle() {
+      const sw = resolve(__dirname, 'dist/sw.js');
+      const content = readFileSync(sw, 'utf-8').replace('__BUILD_ID__', BUILD_ID);
+      writeFileSync(sw, content);
+    }
+  }],
   server: {
-    // 0.0.0.0 — доступ с телефона/планшета в той же Wi‑Fi сети
     host: true,
-    port: 5173,
+    port: 5500,
     strictPort: false,
     open: true
   },
@@ -18,6 +31,17 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html')
+      }
+    },
+    chunkSizeWarningLimit: 600
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'js')
+    }
   }
 });

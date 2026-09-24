@@ -166,7 +166,7 @@ const HockeyTimer = {
       </div>`;
   },
 
-  bind(root, session, persist, onTimerStart, onPeriodEnd) {
+  bind(root, session, persist, onTimerStart, onPeriodEnd, onPause) {
     const state = session.state;
 
     // Инициализация состояния HockeyTimer при необходимости
@@ -258,6 +258,7 @@ const HockeyTimer = {
         state.hockeyTimer.running = false;
         state.hockeyTimer.startedAt = null;
       }
+      if (typeof onPause === 'function') onPause();
       persist();
       updateDisplay();
     };
@@ -313,3 +314,7 @@ const HockeyTimer = {
     });
   }
 };
+
+window.ScoreTimer = ScoreTimer;
+window.HockeyTimer = HockeyTimer;
+

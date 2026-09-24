@@ -14,7 +14,7 @@
 <body>
   <div class="container">
     <h2>Онлайн-просмотр турнирной таблицы</h2>
-    <div class="info">Подключение к серверу событий...</div>
+    <div class="info">Подключение к серверу событий... <span id="lastUpdate" style="margin-left:12px;color:#888;font-size:0.9em;"></span></div>
     <div id="tableWrap">Ожидание данных...</div>
   </div>
 
@@ -22,17 +22,20 @@
     const evtSource = new EventSource('/events');
     const info = document.querySelector('.info');
     const tableWrap = document.getElementById('tableWrap');
+    const lastUpdate = document.getElementById('lastUpdate');
 
-    evtSource.onopen = () => { info.textContent = 'Подключено. Ожидание обновлений.'; };
+    evtSource.onopen = () => { info.childNodes[0].textContent = 'Подключено. Ожидание обновлений. '; };
     evtSource.onmessage = e => {
       try {
         const d = JSON.parse(e.data);
         if (d && d.html) {
           tableWrap.innerHTML = d.html;
         } else if (d && d.wbData) {
-          // If wbData provided, create simple table view
           tableWrap.innerHTML = '<pre>' + JSON.stringify(d.wbData, null, 2) + '</pre>';
         }
+        const now = new Date();
+        const ts = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+        lastUpdate.textContent = 'Обновлено: ' + ts;
       } catch (err) {
         tableWrap.innerHTML = 'Ошибка данных: ' + err.message;
       }

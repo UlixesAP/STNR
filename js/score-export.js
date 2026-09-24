@@ -1,5 +1,6 @@
 const ScoreExport = {
-  exportSession(session) {
+  async exportSession(session) {
+    await SheetJSLoader.load();
     if (typeof XLSX === 'undefined') {
       alert('Библиотека Excel не загружена.');
       return;
@@ -71,3 +72,6 @@ const ScoreExport = {
     }
   }
 };
+
+window.ScoreExport = ScoreExport;
+

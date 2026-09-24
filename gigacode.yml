@@ -1,0 +1,18 @@
+version: 2
+
+tool_rules:
+  write:
+    required: ["filePath", "content"]  # Обязательные поля
+    field_types:
+      filePath: 
+        type: "string"   # Тип данных
+        pattern: ".+.\\..+"  # Регулярка для проверки пути (необязательно)
+      content: 
+        type: "string"
+    default_values:
+      filePath: ""  # Значение по умолчанию при undefined
+      content: ""
+    preprocessor: |
+      // JavaScript для предварительной обработки
+      arguments.filePath = arguments.filePath || "/unknown_path.txt";
+      arguments.content = arguments.content || "";

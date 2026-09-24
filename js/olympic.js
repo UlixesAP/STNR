@@ -421,37 +421,23 @@ const OlympicEngine = {
 
 
   _newMatch(teamA, teamB) {
-
     return {
-
       teamA,
-
       teamB,
-
       scoreA: null,
-
       scoreB: null,
-
       penaltyA: null,
-
       penaltyB: null,
-
+      extraScoreA: null,
+      extraScoreB: null,
       winner: null,
-
       loser: null,
-
       goalDifference: 0,
-
       wasDecidedByPenalties: false,
-
       loserPenaltyScored: null,
-
       loserRegularGoals: 0,
-
       isFinished: false
-
     };
-
   },
 
 
@@ -696,11 +682,13 @@ const OlympicEngine = {
 
     if (winners.length !== 2 || losers.length !== 2) return;
 
+    if (!bracket.thirdPlaceMatch) {
+      bracket.thirdPlaceMatch = this._newMatch(losers[0], losers[1]);
+    }
 
-
-    bracket.thirdPlaceMatch = this._newMatch(losers[0], losers[1]);
-
-    bracket.finalMatch = this._newMatch(winners[0], winners[1]);
+    if (!bracket.finalMatch) {
+      bracket.finalMatch = this._newMatch(winners[0], winners[1]);
+    }
 
   },
 
@@ -982,6 +970,26 @@ const OlympicEngine = {
 
     if (pool.length === 4) {
 
+      // Для mixed flow используем фиксированную сетку: QF1 vs QF4, QF2 vs QF3
+      if (bracket.flow === 'mixed') {
+        const wins = round.matches.map(m => m.winner).filter(Boolean);
+        // wins[0] = QF1 winner, wins[1] = QF2, wins[2] = QF3, wins[3] = QF4
+        bracket.rounds.push({
+
+          number: round.number + 1,
+
+          label: `Тур ${round.number + 1} — полуфинал`,
+
+          matches: [this._newMatch(wins[0], wins[3]), this._newMatch(wins[1], wins[2])],
+
+          byeTeams: []
+
+        });
+
+        return;
+
+      }
+
       const s = shuffleArray(pool);
 
       bracket.rounds.push({
@@ -1006,13 +1014,15 @@ const OlympicEngine = {
 
       const losers = round.matches.map((m) => m.loser).filter(Boolean);
 
-      if (losers.length >= 2 && !bracket.thirdPlaceTeam) {
+      if (losers.length >= 2 && !bracket.thirdPlaceMatch) {
 
         bracket.thirdPlaceMatch = this._newMatch(losers[0], losers[1]);
 
       }
 
-      bracket.finalMatch = this._newMatch(pool[0], pool[1]);
+      if (!bracket.finalMatch) {
+        bracket.finalMatch = this._newMatch(pool[0], pool[1]);
+      }
 
       return;
 
@@ -1074,7 +1084,8 @@ const OlympicEngine = {
 
 
 
-  exportXlsx(meta, matchHistory, bracket) {
+  async exportXlsx(meta, matchHistory, bracket) {
+    await SheetJSLoader.load();
     if (typeof XLSX === 'undefined') {
       throw new Error('библиотека Excel не загружена');
     }
@@ -1144,8 +1155,80 @@ const OlympicEngine = {
     const name = (meta.eventName || 'турнир').replace(/[<>:"/\\|?*]/g, '_');
 
     downloadXlsxWorkbook(wb, `${name}_плейофф.xlsx`);
+  },
+
+  /**
+   * Создать bracket из пар для плей-офф смешанного турнира.
+   *
+   * @param {Array} pairs — пары из MixedEngine.seedFromStandings
+   * @returns {Object} bracket с rounds, finalMatch, thirdPlaceMatch
+   */
+  createBracketFromPairs(pairs) {
+    if (!pairs || !pairs.length) return { rounds: [], finalMatch: null, thirdPlaceMatch: null };
+
+    const bracket = {
+      totalTeams: pairs.length * 2,
+      flow: 'mixed',
+      drawMode: 'seeded',
+      rounds: [],
+      waiting: {},
+      finalMatch: null,
+      thirdPlaceMatch: null,
+      thirdPlaceTeam: null,
+      fromPairs: pairs.map(p => ({ teamA: p.teamA, teamB: p.teamB }))
+    };
+
+    const n = pairs.length;
+    let hasThirdPlace = false;
+    const firstPair = pairs[0];
+    if (firstPair && firstPair.hasThirdPlace !== undefined) {
+      hasThirdPlace = firstPair.hasThirdPlace;
+    }
+
+    if (n === 2) {
+      // 2 пары = полуфиналы → финал
+      bracket.rounds.push({
+        number: 1,
+        label: 'Полуфинал',
+        matches: pairs.map(p => {
+          const m = this._newMatch(p.teamA, p.teamB);
+          m.matchLabel = p.matchLabel || 'SF';
+          return m;
+        }),
+        byeTeams: []
+      });
+
+      bracket.finalMatch = null;
+
+    } else if (n === 4) {
+      // 4 пары = четвертьфиналы → полуфинал → финал
+      bracket.rounds.push({
+        number: 1,
+        label: 'Четвертьфинал',
+        matches: pairs.map(p => {
+          const m = this._newMatch(p.teamA, p.teamB);
+          m.matchLabel = p.matchLabel || 'QF';
+          return m;
+        }),
+        byeTeams: []
+      });
+
+      bracket.finalMatch = null;
+
+    } else if (n === 1) {
+      // 1 пара = только финал
+      bracket.finalMatch = this._newMatch(pairs[0].teamA, pairs[0].teamB);
+      if (hasThirdPlace) {
+        bracket.thirdPlaceMatch = this._newMatch('TBD', 'TBD');
+      }
+    }
+
+    return bracket;
   }
 
 };
 
+
+
+window.OlympicEngine = OlympicEngine;
 

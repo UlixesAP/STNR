@@ -2,6 +2,26 @@
  * Выгрузка .xlsx — синхронно в обработчике нажатия (важно для iOS/Android).
  * На планшетах показываем панель с явной ссылкой «Сохранить файл».
  */
+
+const SheetJSLoader = (() => {
+  let _promise = null;
+
+  function load() {
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+    if (_promise) return _promise;
+    _promise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/vendor/xlsx.full.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Не удалось загрузить SheetJS'));
+      document.head.appendChild(s);
+    });
+    return _promise;
+  }
+
+  return { load };
+})();
+
 function sanitizeXlsxFilename(filename) {
   return (
     String(filename || 'export')
@@ -94,7 +114,13 @@ function downloadXlsxWorkbook(wb, filename) {
   hideDownloadPanel();
 
   if (typeof XLSX === 'undefined') {
-    alert('Библиотека Excel не загружена.\n\nОбновите страницу. Если не помогло — откройте сайт заново.');
+    SheetJSLoader.load().then(() => {
+      if (typeof XLSX !== 'undefined') {
+        downloadXlsxWorkbook(wb, filename);
+      } else {
+        alert('Библиотека Excel не загружена.\n\nОбновите страницу. Если не помогло — откройте сайт заново.');
+      }
+    });
     return;
   }
 
@@ -130,3 +156,13 @@ function downloadXlsxWorkbook(wb, filename) {
     alert('Не удалось создать файл Excel:\n' + (err.message || String(err)));
   }
 }
+
+window.SheetJSLoader = SheetJSLoader;
+window.sanitizeXlsxFilename = sanitizeXlsxFilename;
+window.isIOS = isIOS;
+window.isTouchDevice = isTouchDevice;
+window.hideDownloadPanel = hideDownloadPanel;
+window.showDownloadPanel = showDownloadPanel;
+window.triggerAnchorDownload = triggerAnchorDownload;
+window.downloadXlsxWorkbook = downloadXlsxWorkbook;
+
